@@ -7,6 +7,21 @@ const { AuthorizationCode } = require('simple-oauth2');
 const app = express();
 app.use(cors());
 
+// LOG MASTER
+function log(msg, ...args) {
+    console.log(`[${new Date().toISOString()}] ${msg}`, ...args);
+}
+
+// DEBUG ENV: Use em produção para testar env vars no Railway!
+app.get('/debug-env', (req, res) => {
+    res.json({
+        TRAKT_CLIENT_ID: process.env.TRAKT_CLIENT_ID,
+        TRAKT_CLIENT_SECRET_PRESENT: !!process.env.TRAKT_CLIENT_SECRET,
+        TRAKT_REDIRECT_URI: process.env.TRAKT_REDIRECT_URI,
+        TMDB_API_KEY_PRESENT: !!process.env.TMDB_API_KEY
+    });
+});
+
 const traktClient = {
     client: {
         id: process.env.TRAKT_CLIENT_ID,
@@ -38,10 +53,6 @@ const manifest = {
     "catalogs": []
 };
 
-function log(msg, ...args) {
-    console.log(`[${new Date().toISOString()}] ${msg}`, ...args);
-}
-
 app.get('/manifest.json', (req, res) => {
     log("GET /manifest.json");
     res.json(manifest);
@@ -53,13 +64,14 @@ app.get('/', (req, res) => {
 });
 
 app.get('/auth/login', (req, res) => {
-    log("GET /auth/login");
+    log("GET /auth/login", "ID:", process.env.TRAKT_CLIENT_ID, "REDIRECT:", process.env.TRAKT_REDIRECT_URI);
     const authorizationUri = oauth2.authorizeURL({
-        redirect_uri: redirectUri,
+        redirect_uri: process.env.TRAKT_REDIRECT_URI,
         response_type: 'code'
     });
     res.redirect(authorizationUri);
 });
+
 app.get('/auth/callback', async (req, res) => {
     log("GET /auth/callback");
     const code = req.query.code;
@@ -69,7 +81,7 @@ app.get('/auth/callback', async (req, res) => {
         return;
     }
     try {
-        const accessToken = await oauth2.getToken({ code, redirect_uri: redirectUri });
+        const accessToken = await oauth2.getToken({ code, redirect_uri: process.env.TRAKT_REDIRECT_URI });
         userTraktToken = accessToken.token.access_token;
         log("LOGIN OK - token gravado.");
         res.send('<h2>Login feito com sucesso no Trakt!</h2><p>Você já pode usar o addon normalmente.</p>');
@@ -126,7 +138,6 @@ app.get('/meta/:type/:id', async (req, res) => {
 
     const statusText = watched ? "✔️ Assistido." : "❌ Não Assistido.";
 
-    // HandCard no estilo Ratings Aggregator: vídeos + streams
     log("Retornando HANDY meta (Campo videos + streams)", {id, type, statusText});
 
     res.json({
@@ -156,8 +167,10 @@ app.get('/meta/:type/:id', async (req, res) => {
     });
 });
 
-const port = process.env.PORT || 7000;
+// Railway/Heroku/Render usam process.env.PORT (NUNCA fixe!)
+// Usa 8080 por padrão local, mas sempre prioriza process.env.PORT
+const port = process.env.PORT || 8080;
 app.listen(port, () => {
-    log(`Servidor rodando em http://localhost:${port}/`);
-    log(`Manifest: http://localhost:${port}/manifest.json`);
+    log(`Servidor rodando em http://0.0.0.0:${port}/`);
+    log(`Manifest: http://0.0.0.0:${port}/manifest.json`);
 });
