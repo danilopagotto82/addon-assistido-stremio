@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "include-component-in-tag": false,
+  "separate-pull-requests": false,
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "sync-all",
+      "components": ["ratings-aggregator", "ratings-pro-frontend"]
+    }
+  ],
+  "packages": {
+    ".": {
+      "path": ".",
+      "release-type": "node",
+      "component": "ratings-aggregator"
+    },
+    "frontend": {
+      "path": "frontend",
+      "release-type": "node",
+      "component": "ratings-pro-frontend"
+    }
+  }
+}
