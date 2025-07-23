@@ -12,7 +12,7 @@ function log(msg, ...args) {
     console.log(`[${new Date().toISOString()}] ${msg}`, ...args);
 }
 
-// DEBUG ENV: Use em produção para testar env vars no Railway!
+// DEBUG ENV: Use temporariamente para testar env vars no Railway!
 app.get('/debug-env', (req, res) => {
     res.json({
         TRAKT_CLIENT_ID: process.env.TRAKT_CLIENT_ID,
@@ -37,6 +37,7 @@ const redirectUri = process.env.TRAKT_REDIRECT_URI;
 const oauth2 = new AuthorizationCode(traktClient);
 let userTraktToken = null;
 
+// Manifesto com assinatura stremioAddonsConfig para o beta!
 const manifest = {
     "id": "org.stremio.trakt-assistido-" + Date.now(),
     "version": "1.0.0",
@@ -50,7 +51,11 @@ const manifest = {
         }
     ],
     "types": ["movie", "series", "episode"],
-    "catalogs": []
+    "catalogs": [],
+    "stremioAddonsConfig": {
+        "issuer": "https://stremio-addons.net",
+        "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..PykHL5Vqd5qsGMKj2R-64A.ld79LFrsCduJEplHPXA-70XlWnr4x9xAgFprRLteKtrBe0YmspxyWIvj3dJUZleoAc6B13csj798X00yhKvPq0xC1P2Daqzu4xxGuluSBlY4lG2bcB_SQGmduRwh1ScU.Zwomcu75bRIgtR-XKl9eOw"
+    }
 };
 
 app.get('/manifest.json', (req, res) => {
@@ -168,7 +173,6 @@ app.get('/meta/:type/:id', async (req, res) => {
 });
 
 // Railway/Heroku/Render usam process.env.PORT (NUNCA fixe!)
-// Usa 8080 por padrão local, mas sempre prioriza process.env.PORT
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
     log(`Servidor rodando em http://0.0.0.0:${port}/`);
