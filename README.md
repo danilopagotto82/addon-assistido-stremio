@@ -44,6 +44,17 @@ text
 
 text
 
+## 🆕 Modo Multiusuário
+
+Agora é possível realizar login com múltiplos perfis Trakt!
+
+- Acesse `/config` para adicionar/remover usuários.
+- Use o campo "Nome do usuário" para separar tokens (ex: "danilo", "julia", etc)
+- Cada usuário pode autenticar via Trakt separadamente (ideal para famílias/shares).
+- O Stremio pode ser configurado para acessar /meta/:type/:id?user=SEU_USUARIO caso queira integração avançada.
+
+Todos os tokens ficam apenas no arquivo `src/storage/users.json`.
+
 ## Tecnologias usadas
 
 - Node.js
