@@ -44,7 +44,7 @@ text
 
 text
 
-## 🆕 Modo Multiusuário
+## 🆕 Modo Multiusuário ##
 
 Agora é possível realizar login com múltiplos perfis Trakt!
 
