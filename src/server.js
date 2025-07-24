@@ -16,34 +16,30 @@ function saveTokens(obj) {
 
 const app = express();
 
-// Log de cada requisição recebida, útil para debug:
+// ----- ESSENCIAL -----
+app.use('/meta/:type/:id.json', (req, res, next) => {
+    req.url = req.url.replace(/\.json(\?|$)/, '$1'); // Remove .json para o SDK responder
+    next();
+});
+
+// Middleware opcional de logs
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     next();
 });
 
+// ----- SDK Stremio DEPOIS do middleware acima -----
+app.use("/", getRouter(addonInterface));
+
+// ----- SUA INTERFACE CUSTOM -----
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
-// Corrige: aceita meta sem e com .json na rota
-app.get('/meta/:type/:id', (req, res, next) => {
-    // Deixa o Stremio SDK tratar via getRouter
-    next();
-});
-app.get('/meta/:type/:id.json', (req, res, next) => {
-    req.url = req.url.replace(/\.json$/, '');
-    next();
-});
-
-// Use o router do addon depois do ajuste acima
-app.use("/", getRouter(addonInterface));
-
-// Página config multiusuário
 app.get("/config", (req, res) => {
     res.render("config", { users: getTokens() });
 });
 
-// Autenticação Trakt
+// Login Trakt
 app.get('/auth/login', (req, res) => {
     let user = req.query.user || 'default';
     const { AuthorizationCode } = require("simple-oauth2");
@@ -95,7 +91,6 @@ app.get('/auth/callback', async (req, res) => {
     }
 });
 
-// Logout de usuário
 app.get('/logout/:user', (req, res) => {
     let tokens = getTokens();
     delete tokens[req.params.user];
@@ -103,8 +98,8 @@ app.get('/logout/:user', (req, res) => {
     res.redirect("/config");
 });
 
-// Porta do Railway
+// ----- PORTA CORRETA -----
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
-    console.log(`[STREMIO SDK] Rodando em http://localhost:${port}/`);
+    console.log(`[STREMIO SDK] Rodando na porta ${port}`);
 });
