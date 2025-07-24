@@ -1,5 +1,5 @@
 const express = require("express");
-const { serveHTTP } = require("stremio-addon-sdk");
+const { getRouter } = require("stremio-addon-sdk");
 const path = require("path");
 const fs = require("fs");
 const addonInterface = require("./addon");
@@ -16,15 +16,13 @@ function saveTokens(obj) {
 }
 
 const app = express();
+
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
-const port = process.env.PORT || 8080;
+// Stremio SDK como "router" Express!
+app.use("/", getRouter(addonInterface));
 
-// Rota principal do SDK
-app.use("/", serveHTTP(addonInterface));
-
-// Configuração multiusuário (simples)
 app.get("/config", (req, res) => {
     res.render("config", { users: getTokens() });
 });
@@ -52,12 +50,10 @@ app.get('/auth/login', (req, res) => {
     res.redirect(authorizationUri);
 });
 
-// Callback do OAuth2 — salva token para o user correto!
 app.get('/auth/callback', async (req, res) => {
     const { AuthorizationCode } = require("simple-oauth2");
     const code = req.query.code;
     const user = req.query.state || 'default';
-    // reconfigura client
     const client = new AuthorizationCode({
         client: {
             id: process.env.TRAKT_CLIENT_ID,
@@ -92,6 +88,7 @@ app.get('/logout/:user', (req, res) => {
     res.redirect("/config");
 });
 
+const port = process.env.PORT || 8080;
 app.listen(port, () => {
     console.log(`[STREMIO SDK] Rodando em http://localhost:${port}/`);
 });
