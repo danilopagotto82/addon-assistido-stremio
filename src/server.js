@@ -16,25 +16,24 @@ function saveTokens(obj) {
 
 const app = express();
 
-// ----- ESSENCIAL: garante /meta/:type/:id e /meta/:type/:id.json -----
+// Middleware para aceitar /meta/:type/:id e /meta/:type/:id.json
 app.use((req, res, next) => {
-    // Se for rota /meta/... com .json, remove a extensão antes do SDK
     if (/^\/meta\/[^\/]+\/[^\/]+\.json($|\?)/.test(req.url)) {
         req.url = req.url.replace(/\.json(\?|$)/, '$1');
     }
     next();
 });
 
-// Log útil para debug
+// Log para debug
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     next();
 });
 
-// ----------------- SDK Stremio ---------------
+// SDK Stremio, rotas padrão
 app.use("/", getRouter(addonInterface));
 
-// -------------- SUA INTERFACE CUSTOM --------------
+// ----------- SUAS ROTAS CUSTOM ----------- //
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
@@ -100,7 +99,7 @@ app.get('/logout/:user', (req, res) => {
     res.redirect("/config");
 });
 
-// -------- PORTA CORRETA PARA RAILWAY/NODE -------
+// Porta Railway/Heroku padrão
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
     console.log(`[STREMIO SDK] Rodando na porta ${port}`);

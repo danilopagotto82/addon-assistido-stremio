@@ -34,8 +34,10 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-builder.defineMetaHandler(async ({ type, id, extra }) => {
-    let usuario = (extra && extra.user) ? extra.user : "default";
+// Certifique-se que tudo sempre retorna (inclusive 'user') no extra OU na query string manual
+builder.defineMetaHandler(async ({ type, id, extra = {}, args = {} }) => {
+    // Captura também de args (SDK 1.x coloca tudo em extra, mas previna)
+    let usuario = extra.user || (args && args.user) || "default";
     let tokens = getTokens();
     let userTraktToken = tokens[usuario];
 
@@ -59,7 +61,9 @@ builder.defineMetaHandler(async ({ type, id, extra }) => {
                 if (traktType === "movie" && item.movie && item.movie.ids.imdb === id) watched = true;
                 if (traktType === "episode" && item.episode && item.episode.ids.imdb === id) watched = true;
             }
-        } catch (err) {}
+        } catch (err) {
+            // log se desejar: console.error('Erro no Trakt:', err)
+        }
         if (watched) statusText = "✔️ Assistido.";
     }
 
@@ -91,3 +95,4 @@ builder.defineMetaHandler(async ({ type, id, extra }) => {
 });
 
 module.exports = builder.getInterface();
+
