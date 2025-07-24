@@ -1,176 +1,97 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const axios = require('axios');
-const { AuthorizationCode } = require('simple-oauth2');
+const express = require("express");
+const { serveHTTP } = require("stremio-addon-sdk");
+const path = require("path");
+const fs = require("fs");
+const addonInterface = require("./addon");
+const axios = require("axios");
+require("dotenv").config();
 
-const app = express();
-app.use(cors());
-
-// LOG MASTER
-function log(msg, ...args) {
-    console.log(`[${new Date().toISOString()}] ${msg}`, ...args);
+const USERS_FILE = path.join(__dirname, "storage", "users.json");
+function getTokens() {
+    try { return JSON.parse(fs.readFileSync(USERS_FILE, "utf-8")); }
+    catch { return {}; }
+}
+function saveTokens(obj) {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(obj, null, 2));
 }
 
-// DEBUG ENV: Use em produção para testar env vars no Railway!
-app.get('/debug-env', (req, res) => {
-    res.json({
-        TRAKT_CLIENT_ID: process.env.TRAKT_CLIENT_ID,
-        TRAKT_CLIENT_SECRET_PRESENT: !!process.env.TRAKT_CLIENT_SECRET,
-        TRAKT_REDIRECT_URI: process.env.TRAKT_REDIRECT_URI,
-        TMDB_API_KEY_PRESENT: !!process.env.TMDB_API_KEY
-    });
+const app = express();
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+
+const port = process.env.PORT || 8080;
+
+// Rota principal do SDK
+app.use("/", serveHTTP(addonInterface));
+
+// Configuração multiusuário (simples)
+app.get("/config", (req, res) => {
+    res.render("config", { users: getTokens() });
 });
 
-const traktClient = {
-    client: {
-        id: process.env.TRAKT_CLIENT_ID,
-        secret: process.env.TRAKT_CLIENT_SECRET
-    },
-    auth: {
-        tokenHost: 'https://api.trakt.tv',
-        authorizePath: '/oauth/authorize',
-        tokenPath: '/oauth/token'
-    }
-};
-const redirectUri = process.env.TRAKT_REDIRECT_URI;
-const oauth2 = new AuthorizationCode(traktClient);
-let userTraktToken = null;
-
-const manifest = {
-    "id": "org.stremio.trakt-assistido-" + Date.now(),
-    "version": "1.0.0",
-    "name": "HandyCard - Trakt Assistido",
-    "description": "Exibe handy card lateral com status de assistido do Trakt.",
-    "resources": [
-        {
-            "name": "meta",
-            "types": ["movie", "episode"],
-            "idPrefixes": ["tt"]
-        }
-    ],
-    "types": ["movie", "series", "episode"],
-    "catalogs": []
-};
-
-app.get('/manifest.json', (req, res) => {
-    log("GET /manifest.json");
-    res.json(manifest);
-});
-
-app.get('/', (req, res) => {
-    log("GET /");
-    res.send('Addon Stremio HandyCard - Trakt Assistido rodando!');
-});
-
+// Login Trakt por user
 app.get('/auth/login', (req, res) => {
-    log("GET /auth/login", "ID:", process.env.TRAKT_CLIENT_ID, "REDIRECT:", process.env.TRAKT_REDIRECT_URI);
-    const authorizationUri = oauth2.authorizeURL({
+    let user = req.query.user || 'default';
+    const { AuthorizationCode } = require("simple-oauth2");
+    const client = new AuthorizationCode({
+        client: {
+            id: process.env.TRAKT_CLIENT_ID,
+            secret: process.env.TRAKT_CLIENT_SECRET
+        },
+        auth: {
+            tokenHost: 'https://api.trakt.tv',
+            authorizePath: '/oauth/authorize',
+            tokenPath: '/oauth/token'
+        }
+    });
+    const authorizationUri = client.authorizeURL({
         redirect_uri: process.env.TRAKT_REDIRECT_URI,
-        response_type: 'code'
+        response_type: 'code',
+        state: user
     });
     res.redirect(authorizationUri);
 });
 
+// Callback do OAuth2 — salva token para o user correto!
 app.get('/auth/callback', async (req, res) => {
-    log("GET /auth/callback");
+    const { AuthorizationCode } = require("simple-oauth2");
     const code = req.query.code;
-    if (!code) {
-        log("ERRO: callback sem code");
-        res.status(400).send('Faltando código de autorização!');
-        return;
-    }
-    try {
-        const accessToken = await oauth2.getToken({ code, redirect_uri: process.env.TRAKT_REDIRECT_URI });
-        userTraktToken = accessToken.token.access_token;
-        log("LOGIN OK - token gravado.");
-        res.send('<h2>Login feito com sucesso no Trakt!</h2><p>Você já pode usar o addon normalmente.</p>');
-    } catch (err) {
-        log("ERRO ao autenticar Trakt:", err);
-        res.status(500).send(`Erro ao autenticar no Trakt: ${err.message}`);
-    }
-});
-
-app.get('/meta/:type/:id', async (req, res) => {
-    log("INICIO /meta/:type/:id", req.params);
-    let { type } = req.params;
-    let id = req.params.id;
-    if (id.endsWith('.json')) id = id.replace(/\.json$/, '');
-
-    log("Processando /meta", { type, id });
-
-    let traktType;
-    if (type === "movie") traktType = "movie";
-    else if (type === "episode") traktType = "episode";
-    else {
-        log("Requisição com type inválido:", type);
-        res.status(400).json({ error: "Só 'movie' ou 'episode'" });
-        return;
-    }
-
-    let watched = false;
-
-    if (userTraktToken) {
-        let traktPath = traktType === "movie"
-            ? "https://api.trakt.tv/sync/watched/movies"
-            : "https://api.trakt.tv/sync/watched/episodes";
-        try {
-            log("Buscando info assistido no Trakt:", traktPath);
-            const response = await axios.get(traktPath, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'trakt-api-version': '2',
-                    'trakt-api-key': process.env.TRAKT_CLIENT_ID,
-                    'Authorization': `Bearer ${userTraktToken}`
-                }
-            });
-            for (const item of response.data) {
-                if (traktType === "movie" && item.movie && item.movie.ids.imdb === id) watched = true;
-                if (traktType === "episode" && item.episode && item.episode.ids.imdb === id) watched = true;
-            }
-            log("Assistido? ", watched);
-        } catch (err) {
-            log("ERRO ao buscar do Trakt:", err.message);
-        }
-    } else {
-        log("Sem token Trakt - não autenticado.");
-    }
-
-    const statusText = watched ? "✔️ Assistido." : "❌ Não Assistido.";
-
-    log("Retornando HANDY meta (Campo videos + streams)", {id, type, statusText});
-
-    res.json({
-        meta: {
-            id, type,
-            name: "",
-            description: "",
-            videos: [
-                {
-                    id: "trakt-status",
-                    title: statusText,
-                    url: "",
-                    quality: "",
-                    externalUrl: "",
-                    isVisited: false
-                }
-            ],
-            streams: [
-                {
-                    name: "Trakt Status",
-                    description: statusText,
-                    url: "",
-                    behaviorHints: { notWebReady: true }
-                }
-            ]
+    const user = req.query.state || 'default';
+    // reconfigura client
+    const client = new AuthorizationCode({
+        client: {
+            id: process.env.TRAKT_CLIENT_ID,
+            secret: process.env.TRAKT_CLIENT_SECRET
+        },
+        auth: {
+            tokenHost: 'https://api.trakt.tv',
+            authorizePath: '/oauth/authorize',
+            tokenPath: '/oauth/token'
         }
     });
+    try {
+        const token = await client.getToken({
+            code,
+            redirect_uri: process.env.TRAKT_REDIRECT_URI
+        });
+        let tokens = getTokens();
+        tokens[user] = token.token.access_token;
+        saveTokens(tokens);
+        res.send(`<h2>Login feito com sucesso<br/>Usuário: ${user}</h2>
+                  <a href="/config">Voltar</a>`);
+    } catch (e) {
+        res.send(`<h2>Erro de autenticação Trakt</h2><pre>${e}</pre>`);
+    }
 });
 
-// Railway/Heroku/Render usam process.env.PORT (NUNCA fixe!)
-// Usa 8080 por padrão local, mas sempre prioriza process.env.PORT
-const port = process.env.PORT || 8080;
+// Logout de usuário
+app.get('/logout/:user', (req, res) => {
+    let tokens = getTokens();
+    delete tokens[req.params.user];
+    saveTokens(tokens);
+    res.redirect("/config");
+});
+
 app.listen(port, () => {
-    log(`Servidor rodando em http://0.0.0.0:${port}/`);
-    log(`Manifest: http://0.0.0.0:${port}/manifest.json`);
+    console.log(`[STREMIO SDK] Rodando em http://localhost:${port}/`);
 });

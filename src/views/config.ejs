@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <title>Stremio HandyCard - Configuração</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/css/bootstrap.min.css" rel="stylesheet"/>
+</head>
+<body class="bg-dark text-light">
+  <div class="container mt-4">
+    <h2>Configuração Multiusuário do HandyCard</h2>
+    <ul>
+      <% Object.entries(users).forEach(([user,token])=>{ %>
+          <li><b><%=user%></b>: <%=token ? "✅ Conectado" : "❌ Não conectado" %>
+          <% if (token) { %>
+            (<a href="/logout/<%=user%>">Logout</a>)
+          <% } %>
+          </li>
+      <% }) %>
+    </ul>
+    <form method="GET" action="/auth/login">
+      <input class="form-control mb-2" placeholder="Nome do usuário" name="user"/>
+      <button class="btn btn-danger">Entrar com Trakt</button>
+    </form>
+  </div>
+</body>
+</html>
