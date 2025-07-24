@@ -3,7 +3,6 @@ const { getRouter } = require("stremio-addon-sdk");
 const path = require("path");
 const fs = require("fs");
 const addonInterface = require("./addon");
-const axios = require("axios");
 require("dotenv").config();
 
 const USERS_FILE = path.join(__dirname, "storage", "users.json");
@@ -17,17 +16,34 @@ function saveTokens(obj) {
 
 const app = express();
 
+// Log de cada requisição recebida, útil para debug:
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
+
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
-// Stremio SDK como "router" Express!
+// Corrige: aceita meta sem e com .json na rota
+app.get('/meta/:type/:id', (req, res, next) => {
+    // Deixa o Stremio SDK tratar via getRouter
+    next();
+});
+app.get('/meta/:type/:id.json', (req, res, next) => {
+    req.url = req.url.replace(/\.json$/, '');
+    next();
+});
+
+// Use o router do addon depois do ajuste acima
 app.use("/", getRouter(addonInterface));
 
+// Página config multiusuário
 app.get("/config", (req, res) => {
     res.render("config", { users: getTokens() });
 });
 
-// Login Trakt por user
+// Autenticação Trakt
 app.get('/auth/login', (req, res) => {
     let user = req.query.user || 'default';
     const { AuthorizationCode } = require("simple-oauth2");
@@ -73,8 +89,7 @@ app.get('/auth/callback', async (req, res) => {
         let tokens = getTokens();
         tokens[user] = token.token.access_token;
         saveTokens(tokens);
-        res.send(`<h2>Login feito com sucesso<br/>Usuário: ${user}</h2>
-                  <a href="/config">Voltar</a>`);
+        res.send(`<h2>Login feito com sucesso<br/>Usuário: ${user}</h2><a href="/config">Voltar</a>`);
     } catch (e) {
         res.send(`<h2>Erro de autenticação Trakt</h2><pre>${e}</pre>`);
     }
@@ -88,6 +103,7 @@ app.get('/logout/:user', (req, res) => {
     res.redirect("/config");
 });
 
+// Porta do Railway
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
     console.log(`[STREMIO SDK] Rodando em http://localhost:${port}/`);
