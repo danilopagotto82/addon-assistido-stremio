@@ -16,24 +16,23 @@ function saveTokens(obj) {
 
 const app = express();
 
-// Middleware para aceitar /meta/:type/:id e /meta/:type/:id.json
-app.use((req, res, next) => {
-    if (/^\/meta\/[^\/]+\/[^\/]+\.json($|\?)/.test(req.url)) {
-        req.url = req.url.replace(/\.json(\?|$)/, '$1');
-    }
+// Middleware para aceitar .json (Stremio SDK 1.6.10 responde sem o .json)
+app.get('/meta/:type/:id.json', (req, res, next) => {
+    // Repasse a request para o handler padrão SEM .json
+    req.url = req.url.replace(/\.json(\?|$)/, '$1');
     next();
 });
 
-// Log para debug
+// Log de requests para debug (opcional, mas útil)
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     next();
 });
 
-// SDK Stremio, rotas padrão
+// SDK do Stremio (pega todas as rotas oficiais, sem .json)
 app.use("/", getRouter(addonInterface));
 
-// ----------- SUAS ROTAS CUSTOM ----------- //
+// Seu painel multiusuário/config
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
@@ -99,7 +98,7 @@ app.get('/logout/:user', (req, res) => {
     res.redirect("/config");
 });
 
-// Porta Railway/Heroku padrão
+// Porta para Railway/Heroku/Nuvem
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
     console.log(`[STREMIO SDK] Rodando na porta ${port}`);
